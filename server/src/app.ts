@@ -7,7 +7,8 @@ import cookieParser from "cookie-parser";
 import { config } from "./config.js";
 import { logger } from "./lib/logger.js";
 import { authrouter } from "./routes/auth.routes.js";
-import { NOTFOUND } from "node:dns";
+import { errorHandler, notFound } from "./modules/auth/middleware/errorHandler.js";
+import { adminRouter } from "./routes/admin.routes.js";
 
 const app = express();
 
@@ -43,6 +44,10 @@ app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 app.use(cookieParser());
 app.use('/api/auth',authrouter)
+app.use('/api/auth/',adminRouter);
+app.use(notFound);
+app.use(errorHandler);
+
 // Basic health check
 app.get("/api/health", (_req, res) => {
   res.status(200).json({
@@ -60,14 +65,40 @@ app.use((_req, res) => {
   });
 });
 
+
 // Global error handler
 app.use(
   (
-    error: Error,
+    error: Error & { statusCode?: number; status?: number; code?: string },
     _req: express.Request,
     res: express.Response,
     _next: express.NextFunction,
   ) => {
+    const statusCode = error.statusCode ?? error.status ?? 500;
+
+    if (statusCode >= 400 && statusCode < 600) {
+      if (statusCode >= 500) {
+        logger.error({ err: error }, "Unhandled application error");
+      } else {
+        logger.warn({ err: error }, "Request failed");
+      }
+
+      res.status(statusCode).json({
+        success: false,
+        message:
+          statusCode >= 500
+            ? "Internal server error"
+            : error.message,
+        ...(error.code && {
+          error: {
+            code: error.code,
+          },
+        }),
+      });
+
+      return;
+    }
+
     logger.error({ err: error }, "Unhandled application error");
 
     res.status(500).json({

@@ -87,8 +87,10 @@ export class PrismaRefreshTokenStore implements RefreshTokenStore{
         tokenHash: r.tokenHash,
         expiresAt: r.expiresAt,
         createdAt: r.createdAt,
-        ip: r.ip?? null,
-        userAgent: r.userAgent?? null,
+        // ip: r.ip?? null,
+        // userAgent: r.userAgent?? null,
+        ip: r.ip?.slice(0, 64)??null,
+        userAgent: r.userAgent?.slice(0, 512)??null,
       },
     });
   }
