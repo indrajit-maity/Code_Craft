@@ -29,12 +29,12 @@ const envSchema = z.object({
     ),
 
   // Redis
-  REDIS_URL: z
-    .string()
-    .regex(
-      /^rediss?:\/\//,
-      "must start with redis:// or rediss://",
-    ),
+  // REDIS_URL: z
+  //   .string()
+  //   .regex(
+  //     /^rediss?:\/\//,
+  //     "must start with redis:// or rediss://",
+  //   ),
 
   USER_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(60),
 

@@ -1,8 +1,7 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import pino from "pino";
-import {pinoHttp} from "pino-http";
+import { pinoHttp } from "pino-http";
 import cookieParser from "cookie-parser";
 import { config } from "./config.js";
 import { logger } from "./lib/logger.js";
@@ -11,7 +10,6 @@ import { errorHandler, notFound } from "./modules/auth/middleware/errorHandler.j
 import { adminRouter } from "./routes/admin.routes.js";
 
 const app = express();
-
 
 // Trust proxy configuration
 app.set("trust proxy", config.TRUST_PROXY);
@@ -22,20 +20,18 @@ app.use(helmet());
 // CORS configuration
 app.use(
   cors({
-    origin:
-      config.CORS_ORIGINS.length > 0
-        ? config.CORS_ORIGINS
-        : false,
+    origin: config.CORS_ORIGINS.length > 0 ? config.CORS_ORIGINS : false,
     credentials: true,
-    methods:['GET','POST','PUT','PATCH','DELETE'],
-    allowedHeaders:['Content-Type','Authorization','X-Requested-With'],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   }),
 );
 
-// HTTP request logging
+// HTTP request logging (health checks run every few seconds, so skip them)
 app.use(
   pinoHttp({
     logger,
+    autoLogging: { ignore: (req) => req.url === "/api/health" },
   }),
 );
 
@@ -43,12 +39,8 @@ app.use(
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 app.use(cookieParser());
-app.use('/api/auth',authrouter)
-app.use('/api/auth/',adminRouter);
-app.use(notFound);
-app.use(errorHandler);
 
-// Basic health check
+// Health check: must be registered BEFORE notFound, or it is never reached.
 app.get("/api/health", (_req, res) => {
   res.status(200).json({
     success: true,
@@ -57,55 +49,12 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-// 404 handler
-app.use((_req, res) => {
-  res.status(404).json({
-    success: false,
-    message: "Route not found",
-  });
-});
+// Routes
+app.use("/api/auth", authrouter);
+app.use("/api/auth", adminRouter);
 
-
-// Global error handler
-app.use(
-  (
-    error: Error & { statusCode?: number; status?: number; code?: string },
-    _req: express.Request,
-    res: express.Response,
-    _next: express.NextFunction,
-  ) => {
-    const statusCode = error.statusCode ?? error.status ?? 500;
-
-    if (statusCode >= 400 && statusCode < 600) {
-      if (statusCode >= 500) {
-        logger.error({ err: error }, "Unhandled application error");
-      } else {
-        logger.warn({ err: error }, "Request failed");
-      }
-
-      res.status(statusCode).json({
-        success: false,
-        message:
-          statusCode >= 500
-            ? "Internal server error"
-            : error.message,
-        ...(error.code && {
-          error: {
-            code: error.code,
-          },
-        }),
-      });
-
-      return;
-    }
-
-    logger.error({ err: error }, "Unhandled application error");
-
-    res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
-  },
-);
+// Must stay last: 404 for unknown routes, then the single error handler.
+app.use(notFound);
+app.use(errorHandler);
 
 export default app;
